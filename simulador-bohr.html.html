@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Simulador de iones – Modelo de Bohr</title>
+<style>
+:root{--bg:#0d1020;--bar:#151a30;--ln:#2b3358;--tx:#e8ecff;--ac:#3d8bff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1020}}
+:root[data-theme="dark"]{--bg:#0d1020}
+html,body{height:100%;margin:0;background:var(--bg);overflow:hidden;color:var(--tx);font:14px system-ui,sans-serif}
+body{display:flex;flex-direction:column}
+#bar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:8px 12px;background:var(--bar);border-bottom:1px solid var(--ln)}
+#bar label{display:flex;align-items:center;gap:6px}
+select,button{background:var(--bg);color:var(--tx);border:1px solid var(--ln);border-radius:6px;padding:5px 10px;font:inherit}
+button{cursor:pointer}button:hover{border-color:var(--ac)}
+input[type=range]{width:150px;accent-color:var(--ac)}
+#sv{min-width:42px;display:inline-block}
+#w{flex:1;min-height:0}
+#ex{background:var(--bar);border-top:1px solid var(--ln);padding:8px 12px 10px}
+#st{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+#st span{padding:2px 10px;border-radius:12px;border:1px solid var(--ln);opacity:.55;font-size:12px}
+#st span.on{opacity:1;border-color:var(--ac);background:rgba(61,139,255,.18)}
+#pt{margin:0;line-height:1.45;font-size:14px;max-width:900px}
+canvas{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges}
+</style></head><body>
+<div id="bar">
+<label>Átomo <select id="sel"></select></label>
+<label>Velocidad <input id="spd" type="range" min="0.05" max="2" step="0.05" value="1"><span id="sv">1.00x</span></label>
+<button id="pz">Pausa</button><button id="rp">Repetir</button>
+<label><input id="cy" type="checkbox"> Ciclar todos</label>
+</div>
+<div id="w"><canvas id="c"></canvas></div>
+<div id="ex"><div id="st"><span>1 · Átomo neutro</span><span>2 · ¿Qué ocurre?</span><span>3 · Ion formado</span></div><p id="pt"></p></div>
+<script>
+(()=>{
+const W=224,H=144,CX=64,CY=72,TAU=Math.PI*2;
+const BG='#0d1020',PAN='#151a30',LN='#2b3358',DIM='#6f7aa8',TX='#e8ecff',PR='#ff8a1f',NE_='#8b93a7',EC='#ffe45e',POS='#3d8bff',NEG='#ff2d95',SH='#3a4470',WH='#ffffff';
+const cv=document.getElementById('c'),dc=cv.getContext('2d');
+const off=document.createElement('canvas');off.width=W;off.height=H;const g=off.getContext('2d');
+function rs(){const d=window.devicePixelRatio||1;cv.width=Math.max(1,Math.round(cv.clientWidth*d));cv.height=Math.max(1,Math.round(cv.clientHeight*d))}
+addEventListener('resize',rs);rs();
+
+// font 3x5
+const FC="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+->().: ";
+const GL=new Uint8Array(128).fill(43);for(let i=0;i<FC.length;i++)GL[FC.charCodeAt(i)]=i;
+const GD=new Uint8Array(FC.length*5);
+"25755 65656 34443 65556 74647 74644 34553 55755 72227 11152 55655 44447 57755 65555 25552 65644 25563 65655 34216 72222 55557 55552 55775 55255 55222 71247 75557 26227 61247 61216 55711 74616 34757 71222 75757 75716 02720 00700 42124 12221 42224 00002 02020 00000".split(' ').forEach((s,i)=>{for(let r=0;r<5;r++)GD[i*5+r]=+s[r]});
+function txt(s,x,y,c){g.fillStyle=c;for(let i=0;i<s.length;i++){const k=GL[s.charCodeAt(i)]*5;for(let r=0;r<5;r++){const b=GD[k+r];if(b&4)g.fillRect(x,y+r,1,1);if(b&2)g.fillRect(x+1,y+r,1,1);if(b&1)g.fillRect(x+2,y+r,1,1)}x+=4}}
+
+// elements: t=+1 cation (loses k), t=-1 anion (gains 1)
+const EL=[
+{nm:'LITHIUM',sy:'LI',Z:3,N:4,sh:[2,1],k:1},
+{nm:'SODIUM',sy:'NA',Z:11,N:12,sh:[2,8,1],k:1},
+{nm:'MAGNESIUM',sy:'MG',Z:12,N:12,sh:[2,8,2],k:2},
+{nm:'ALUMINUM',sy:'AL',Z:13,N:14,sh:[2,8,3],k:3},
+{nm:'POTASSIUM',sy:'K',Z:19,N:20,sh:[2,8,8,1],k:1},
+{nm:'CALCIUM',sy:'CA',Z:20,N:20,sh:[2,8,8,2],k:2},
+{nm:'FLUORINE',sy:'F',Z:9,N:10,sh:[2,7],k:-1},
+{nm:'CHLORINE',sy:'CL',Z:17,N:18,sh:[2,8,7],k:-1}];
+const sel=document.getElementById('sel');
+EL.forEach((e,i)=>{const n=e.sh.length,a=Math.abs(e.k);e.t=e.k>0?1:-1;e.q=e.k;
+e.ion=e.sy+(a>1?a:'')+(e.t>0?'+':'-');e.k=a;
+e.col=e.t>0?POS:NEG;e.zs=''+e.Z;e.e0=''+e.Z;e.e1=''+(e.Z-e.q);
+e.chg='0 > '+(e.t>0?'+'+a:'-'+a);
+e.ty=(e.t>0?'CATION (':'ANION (')+e.ion+')';
+e.fm=e.t>0?e.sy+' > '+e.ion+' + '+(a>1?a:'')+'E-':e.sy+' + E- > '+e.ion;
+e.cf=e.sh.join('-');
+e.name=e.nm[0]+e.nm.slice(1).toLowerCase();
+e.ionS=e.sy[0]+e.sy.slice(1).toLowerCase()+(a>1?['²','³'][a-2]:'')+(e.t>0?'⁺':'⁻');
+e.gas={LI:'helio (He)',NA:'neón (Ne)',MG:'neón (Ne)',AL:'neón (Ne)',K:'argón (Ar)',CA:'argón (Ar)',F:'neón (Ne)',CL:'argón (Ar)'}[e.sy];
+e.oi=e.t>0?(n-1-(e.sh[n-1]==a?1:0)):n-1;
+const T=e.Z+e.N;e.nx=new Int8Array(T);e.ny=new Int8Array(T);e.nc=new Uint8Array(T);
+for(let j=0;j<T;j++){const r=1.75*Math.sqrt(j+.5),an=j*2.39996;e.nx[j]=Math.round(r*Math.cos(an));e.ny[j]=Math.round(r*Math.sin(an));e.nc[j]=(Math.floor((j+1)*e.Z/T)>Math.floor(j*e.Z/T))?1:0}
+const o=document.createElement('option');o.value=i;o.textContent=e.nm[0]+e.nm.slice(1).toLowerCase()+' ('+e.sy[0]+e.sy.slice(1).toLowerCase()+' → '+e.ion.replace(/^(.)(.*)$/,(m,a1,b)=>a1+b.toLowerCase().replace('+','⁺').replace('-','⁻'))+')';sel.appendChild(o)});
+
+const R=[12,25,38,51],WS=[5.2,3,1.9,1.3];
+const RING=R.map(r=>{const m=new Uint8Array((2*r+1)**2),o=[];const mk=(x,y)=>{const k=(y+r)*(2*r+1)+x+r;if(!m[k]){m[k]=1;o.push(x,y)}};
+for(let i=-r;i<=r;i++){const j=Math.round(Math.sqrt(r*r-i*i));mk(i,j);mk(i,-j);mk(j,i);mk(-j,i)}return Int16Array.from(o)});
+function ring(i,c,full){g.fillStyle=c;const a=RING[i];for(let k=0;k<a.length;k+=2){const x=a[k],y=a[k+1];if(full||((x+y)&1)===0)g.fillRect(CX+x,CY+y,1,1)}}
+
+// electrons: ST 0 orbit,1 out,2 gone,3 incoming,4 excited,5 waiting
+const ES=new Int8Array(24),ST=new Int8Array(24),EA=new Float32Array(24),EX=new Float32Array(24),EY=new Float32Array(24),VX=new Float32Array(24),VY=new Float32Array(24),rot=new Float32Array(4);
+let NE=0,cur=0,ph=0,tm=0,T0=0,orb=0,el=EL[0],clock=0,speed=1,paused=false,cycle=false;
+function load(i){cur=i;el=EL[i];NE=0;const n=el.sh.length;
+for(let s=0;s<n;s++){const slots=(el.t<0&&s==n-1)?8:el.sh[s];rot[s]=Math.random()*TAU;
+for(let j=0;j<el.sh[s];j++){ES[NE]=s;EA[NE]=j*TAU/slots;ST[NE]=0;NE++}}
+if(el.t<0){ES[NE]=n-1;EA[NE]=el.sh[n-1]*TAU/8;ST[NE]=5;EX[NE]=-6;EY[NE]=(n==3)?22:118;NE++}
+ph=0;tm=0;sel.value=i}
+function opos(i){const a=rot[ES[i]]+EA[i],r=R[ES[i]];EX[i]=CX+Math.cos(a)*r;EY[i]=CY+Math.sin(a)*r}
+function update(dt){
+tm+=dt;orb+=dt;clock+=dt;
+if(orb>=1/13){for(let s=0;s<4;s++)rot[s]+=WS[s]*orb;orb=0}
+for(let i=0;i<NE;i++){const s=ST[i];
+if(s===0||s===4)opos(i);
+else if(s===1){const f=1+dt*1.6;VX[i]*=f;VY[i]*=f;EX[i]+=VX[i]*dt;EY[i]+=VY[i]*dt;if(EX[i]<-6||EX[i]>134||EY[i]<-6||EY[i]>150)ST[i]=2}
+else if(s===3){const a=rot[ES[i]]+EA[i],tx=CX+Math.cos(a)*R[ES[i]],ty=CY+Math.sin(a)*R[ES[i]],dx=tx-EX[i],dy=ty-EY[i],d=Math.sqrt(dx*dx+dy*dy);
+if(d<4)ST[i]=0;else{EX[i]+=dx/d*95*dt;EY[i]+=dy/d*95*dt}}}
+if(ph===0){if(tm>=3){ph=1;tm=0}}
+else if(ph===1){let done=true;
+if(el.t>0){for(let j=0;j<el.k;j++){const i=NE-1-j,tA=.3+1.5*j,tB=tA+.8;
+if(ST[i]===0&&tm>=tA)ST[i]=4;
+if(ST[i]===4&&tm>=tB){const a=rot[ES[i]]+EA[i];VX[i]=Math.cos(a)*45;VY[i]=Math.sin(a)*45;ST[i]=1}
+if(ST[i]!==2)done=false}}
+else{const i=NE-1;if(ST[i]===5&&tm>=.4)ST[i]=3;if(ST[i]!==0)done=false}
+if(done){ph=2;tm=0}}
+else if(ph===2){if(tm>=3.8){ph=3;tm=0}}
+else if(tm>=.9)load(cycle?(cur+1)%EL.length:cur);
+}
+function pips(n,x,y,c,extra,ec){for(let i=0;i<n;i++){g.fillStyle=i>=n-extra?ec:c;g.fillRect(x+i*3,y,2,2)}}
+function render(){
+g.fillStyle=BG;g.fillRect(0,0,W,H);
+for(let s=0;s<el.sh.length;s++){if(ph>=2&&s===el.oi)continue;ring(s,SH,false);txt('N'+(s+1),CX+2,CY-R[s]-6,DIM)}
+const ion=ph>=2,fl=ion&&tm<1.6&&((tm*8)|0)%2===0;
+if(ion)ring(el.oi,fl?WH:el.col,fl);
+const T=el.nx.length;
+for(let i=0;i<T;i++){g.fillStyle=el.nc[i]?PR:NE_;g.fillRect(CX+el.nx[i]-1,CY+el.ny[i]-1,2,2)}
+if(fl){g.fillStyle=el.col;const b=el.t>0?11:12;g.fillRect(CX-b,CY-b,b*2,1);g.fillRect(CX-b,CY+b,b*2,1);g.fillRect(CX-b,CY-b,1,b*2);g.fillRect(CX+b,CY-b,1,b*2+1)}
+const bl=((clock*12)|0)&1;
+for(let i=0;i<NE;i++){const s=ST[i];if(s===2||s===5)continue;const x=Math.round(EX[i]),y=Math.round(EY[i]);if(x<-2||x>127)continue;
+g.fillStyle=(s===4&&bl)||s===1?WH:EC;g.fillRect(x-1,y,3,1);g.fillRect(x,y-1,1,3)}
+txt(ion?el.ion:el.sy,4,4,ion?el.col:TX);
+txt(ph===2?'ION STATE':ph===1?(el.t>0?'IONIZATION':'ELECTRON CAPTURE'):'NEUTRAL STATE',4,H-9,DIM);
+g.fillStyle=LN;g.fillRect(128,0,1,H);g.fillStyle=PAN;g.fillRect(129,0,W-129,H);
+const x0=133;
+txt('ELEMENT',x0,4,DIM);txt(el.nm,x0,11,TX);
+txt('PROTONS (P+)',x0,22,DIM);txt(el.zs,x0,29,PR);pips(el.Z,x0+10,30,PR,0,PR);
+txt('ELECTRONS (E-)',x0,42,DIM);txt(ion?el.e1:el.e0,x0,49,EC);
+pips(ion?el.Z-el.q:el.Z,x0+10,50,EC,ion&&el.t<0?1:0,el.col);
+txt('NET CHARGE',x0,62,DIM);
+const hl=ion&&tm<.7&&bl;txt(ion?el.chg:'0',x0,69,hl?WH:ion?el.col:TX);
+txt('TYPE',x0,82,DIM);txt(ion?el.ty:'NEUTRAL ATOM',x0,89,ion?(hl?WH:el.col):TX);
+txt(ion?el.fm:el.sy,x0,102,TX);
+txt('SHELLS '+el.cf,x0,112,DIM);
+txt('N '+el.N+'  Z '+el.Z,x0,121,DIM);
+let c=0;if(ph===3)c=tm/.9;else if(ph===0&&tm<.4)c=1-tm/.4;
+if(c>0){const h=Math.round(c*72);g.fillStyle=BG;g.fillRect(0,0,W,h);g.fillRect(0,H-h,W,h)}
+const s=Math.max(1,Math.floor(Math.min(cv.width/W,cv.height/H))),ox=Math.floor((cv.width-W*s)/2),oy=Math.floor((cv.height-H*s)/2);
+dc.imageSmoothingEnabled=false;dc.fillStyle=BG;dc.fillRect(0,0,cv.width,cv.height);dc.drawImage(off,0,0,W,H,ox,oy,W*s,H*s);
+}
+// controls
+const spd=document.getElementById('spd'),sv=document.getElementById('sv'),pz=document.getElementById('pz');
+sel.onchange=()=>load(+sel.value);
+spd.oninput=()=>{speed=+spd.value;sv.textContent=speed.toFixed(2)+'x'};
+pz.onclick=()=>{paused=!paused;pz.textContent=paused?'Reanudar':'Pausa'};
+document.getElementById('rp').onclick=()=>load(cur);
+document.getElementById('cy').onchange=e=>{cycle=e.target.checked};
+const stp=[...document.querySelectorAll('#st span')],ptx=document.getElementById('pt');let ekey=-1;
+function explain(){const k=cur*4+ph;if(k===ekey)return;ekey=k;
+const a=el.k,v=el.sh[el.sh.length-1],pl=a>1?'s':'',n=ph===0?0:ph===1?1:2;
+stp.forEach((s,i)=>s.className=i===n?'on':'');
+let h;
+if(ph===0)h=`<b>Átomo neutro de ${el.name} (${el.sy[0]+el.sy.slice(1).toLowerCase()}).</b> Tiene ${el.Z} protones (+) y ${el.Z} electrones (−): las cargas se compensan y la carga neta es 0. Su última capa tiene ${v} electrón${v>1?'es':''}.`;
+else if(ph===1)h=el.t>0
+?`<b>Pierde electrones.</b> Al ${el.name} le basta perder ${a>1?'sus '+a+' electrones':'su electrón'} de valencia para quedar estable. Están lejos del núcleo y poco atraídos, así que se escapan cuando el átomo recibe energía (calor, luz, una descarga eléctrica) o choca con un átomo que los atrae con fuerza, como el cloro o el oxígeno.`
+:`<b>Gana un electrón.</b> Al ${el.name} le falta 1 electrón para completar el octeto (8 en la última capa). Si se acerca un electrón libre, o un átomo que lo ceda con facilidad (un metal como el sodio o el calcio), el núcleo lo atrae y lo captura en la capa incompleta.`;
+else h=el.t>0
+?`<b>Catión ${el.ionS}.</b> Ahora hay ${el.Z} protones (+) pero solo ${el.Z-a} electrones (−): sobran ${a} carga${pl} positiva${pl}, así que la carga neta es +${a}. Sus capas quedan como las del ${el.gas}: una configuración estable.`
+:`<b>Anión ${el.ionS}.</b> Hay ${el.Z} protones (+) y ${el.Z+1} electrones (−): sobra 1 carga negativa, así que la carga neta es −1. Con 8 electrones en la última capa queda como el ${el.gas}.`;
+ptx.innerHTML=h}
+load(1);
+function loop(t){const now=t/1000;let dt=now-T0;T0=now;if(dt>.1)dt=.1;if(!paused)update(dt*speed);render();explain();requestAnimationFrame(loop)}
+requestAnimationFrame(t=>{T0=t/1000;loop(t)});
+})();
+</script></body></html>
