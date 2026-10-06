@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Caída Libre y Conservación de la Energía - Galileo</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 1rem;
+      box-sizing: border-box;
+    }
+    h1 {
+      font-size: 1.8rem;
+      margin-bottom: 0.5rem;
+      text-align: center;
+    }
+    p {
+      color: #94a3b8;
+      max-width: 600px;
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+    .video-container {
+      background: #1e293b;
+      padding: 1rem;
+      border-radius: 1rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      border: 1px solid #334155;
+      max-width: 100%;
+    }
+    video {
+      width: 100%;
+      max-width: 500px;
+      border-radius: 0.5rem;
+      display: block;
+    }
+    .btn-volver {
+      margin-top: 2rem;
+      color: #818cf8;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .btn-volver:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🍎 Caída Libre y Energía (Galileo)</h1>
+  <p>Simulación visual de la transformación de la Energía Potencial (PE) en Energía Cinética (KE) durante la caída desde la Torre de Pisa.</p>
+
+  <div class="video-container">
+    <video autoplay loop muted playsinline controls>
+      <source src="caida-libre.mp4" type="video/mp4">
+      Tu navegador no soporta el reproductor de vídeo.
+    </video>
+  </div>
+
+  <a href="index.html" class="btn-volver">← Volver al portal de simulaciones</a>
+
+</body>
+</html>
